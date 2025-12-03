@@ -52,32 +52,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          tags: ${{ github.repository }}:latest
-          push: false
-          load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
       - name: Run Trivy vulnerability scanner in image mode and fail on High/Critical
-        uses: aquasecurity/trivy-action@0.14.0 
+        uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: '${{ github.repository }}:latest'
+          image-ref: 'docker.io/nova136/fastapi-app:latest'
           scan-type: 'image'
           format: 'table'
           exit-code: '1' 
           severity: 'CRITICAL,HIGH'
 
       - name: Generate JSON report for artifact upload (Optional)
-        uses: aquasecurity/trivy-action@0.14.0 
-        with:
-          image-ref: '${{ github.repository }}:latest'
+        uses: aquasecurity/trivy-action@0.28.0
+        with: 
+          image-ref: 'docker.io/nova136/fastapi-app:latest'
           scan-type: 'image'
           format: 'json'
           output: 'trivy-image-results.json'
@@ -88,9 +75,3 @@ jobs:
         with:
           name: trivy-image-report
           path: trivy-image-results.json
-
-      - name: Clean up Docker images after scan
-        if: always()
-        run: |
-          docker rmi ${{ github.repository }}:latest || true
-          docker system prune -af
