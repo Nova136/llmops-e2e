@@ -21,21 +21,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Use a specific, stable version of the Trivy Action (e.g., 0.14.0)
-      - name: Run Trivy vulnerability scanner in FS mode
-        uses: aquasecurity/trivy-action@0.14.0 
-        with:
-          scan-type: 'fs'
-          # Use 'github' format to generate a GitHub-compatible SARIF report
-          format: 'github' 
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
-          # Optional: Limit the severities included in the SARIF file to reduce file size and compliance issues
-          limit-severities-for-sarif: true 
+      - name: Build an image from Dockerfile
+        run: |
+          docker build -t docker.io/nova136/fastapi-app:latest .
 
-      - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v4
-        if: always() # Ensures the report is uploaded even if the scan step fails
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: 'docker.io/nova136/fastapi-app:latest'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-results.sarif'
 
@@ -63,7 +61,7 @@ jobs:
 
       - name: Generate JSON report for artifact upload (Optional)
         uses: aquasecurity/trivy-action@0.28.0
-        with: 
+        with:
           image-ref: 'docker.io/nova136/fastapi-app:latest'
           scan-type: 'image'
           format: 'json'
