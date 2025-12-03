@@ -5,7 +5,10 @@ on: [push, pull_request]
 jobs:
   evaluate:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: read
+      actions: read
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -14,50 +17,33 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
           pip install deepeval
           pip install -r requirements.txt
-          pip install pytest
 
       - name: Start FastAPI server in background
-        run: |
-          nohup python day02.py > server.log 2>&1 &
-          echo $! > server.pid
+        uses: christophelim/background-action@v1.0.0
+        with:
+          command: python day02.py
         env:
           PYTHONUNBUFFERED: 1
 
       - name: Wait for server to be ready
         run: |
-          for i in {1..30}; do
-            if curl -f http://localhost:8000/docs > /dev/null 2>&1; then
-              echo "Server is ready!"
-              exit 0
-            fi
-            echo "Waiting for server... ($i/30)"
-            sleep 2
-          done
-          echo "Server failed to start"
-          cat server.log || true
-          exit 1
+          curl --retry 5 --retry-delay 6 -v http://localhost:8000/docs
+          echo "Server is ready and reachable."
 
-      - name: Run DeepEval unit tests
+      - name: Run DeepEval unit tests with pytest (No API Key Required)
         run: |
           python -m pytest tests/ -v
         env:
-          DEEPEVAL_API_KEY: ${{ secrets.DEEPEVAL_API_KEY }}
+          # DEEPEVAL_API_KEY removed as requested
           API_URL: http://localhost:8000
 
-      - name: Stop FastAPI server
-        if: always()
-        run: |
-          if [ -f server.pid ]; then
-            kill $(cat server.pid) || true
-          fi
-          pkill -f "python day02.py" || true
-
-      - name: Upload DeepEval results
+      - name: Upload DeepEval results as Artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -65,5 +51,4 @@ jobs:
           path: |
             deepeval-results/
             test-results/
-            server.log
-
+            .deepeval/ 
