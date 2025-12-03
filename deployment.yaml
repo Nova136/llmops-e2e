@@ -13,7 +13,7 @@ spec:
         app: gpt-hf-pod
     spec:
       containers:
-      - name: gptcontainer
-        image: darryl1975/fastapi-app:v1amd64
-        ports:
-        - containerPort: 8000
+        - name: gptcontainer
+          image: nova136/fastapi-app:v1amd64
+          ports:
+            - containerPort: 8000
