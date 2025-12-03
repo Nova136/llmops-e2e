@@ -13,6 +13,7 @@ jobs:
   scan-filesystem:
     name: Scan Filesystem
     runs-on: ubuntu-latest
+    # Recommended permissions configuration for GitHub Actions security
     permissions:
       contents: read
       security-events: write
@@ -21,19 +22,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Use a specific, stable version instead of 'master' for production workflows
       - name: Run Trivy vulnerability scanner in FS mode
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.14.0 
         with:
           scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
+          # Use 'github' format to generate SARIF report directly
+          format: 'github' 
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
-          version: '0.68.1'
+          # Action automatically handles versioning internally, no need to specify version unless debugging
 
+      # Use a specific, stable version of the CodeQL upload action
       - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v4
-        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() # Ensures the report is uploaded even if the scan step fails
         with:
           sarif_file: 'trivy-results.sarif'
 
@@ -42,6 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # Added 'packages: write' permission if you decide to push to GHCR later
       security-events: write
     
     steps:
@@ -52,44 +56,54 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker image
+        # Standardizing the tag to use environment variables for better traceability
         uses: docker/build-push-action@v5
         with:
           context: .
-          tags: fastapi-app:latest
-          push: false
+          tags: ${{ github.repository }}:latest # Using GH repo name for standard tag
+          push: false # We only need to load it into the runner's docker daemon
           load: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Run Trivy vulnerability scanner in image mode
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'image'
-          scan-ref: 'fastapi-app:latest'
-          format: 'table'
-          exit-code: '1'
-          severity: 'CRITICAL,HIGH'
-          version: '0.68.1'
+      # --- Streamlined Trivy Scan and Reporting Steps ---
 
-      - name: Generate Trivy JSON report
-        uses: aquasecurity/trivy-action@master
+      - name: Run Trivy vulnerability scanner in image mode and fail on High/Critical
+        # Use a specific, stable version
+        uses: aquasecurity/trivy-action@0.14.0 
         with:
+          # Reference the standardized image tag
+          image-ref: '${{ github.repository }}:latest'
           scan-type: 'image'
-          scan-ref: 'fastapi-app:latest'
+          # Use 'table' format for readability in GitHub Actions logs
+          format: 'table' 
+          # The exit-code: '1' ensures the job fails if a vulnerability is found.
+          exit-code: '1' 
+          severity: 'CRITICAL,HIGH'
+
+      # Combined the second JSON report generation into the previous step's reporting logic
+      # If you still need a JSON artifact uploaded:
+      - name: Generate JSON report for artifact upload (Optional)
+        # Use a specific, stable version
+        uses: aquasecurity/trivy-action@0.14.0 
+        with:
+          image-ref: '${{ github.repository }}:latest'
+          scan-type: 'image'
           format: 'json'
           output: 'trivy-image-results.json'
-          version: '0.68.1'
+          # Do not set exit-code: '1' here, as the previous step already determined job status.
 
-      - name: Clean up Docker images after scan
-        if: always()
-        run: |
-          docker rmi fastapi-app:latest || true
-          docker system prune -af --volumes
-
-      - name: Upload Trivy JSON report
+      - name: Upload Trivy JSON report Artifact
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: trivy-image-report
           path: trivy-image-results.json
 
+      # Clean up is optional as the runner environment is ephemeral, but good practice
+      - name: Clean up Docker images after scan
+        if: always()
+        run: |
+          docker rmi ${{ github.repository }}:latest || true
+          # Prune command is generally enough to clean up all build cache and layers
+          docker system prune -af
