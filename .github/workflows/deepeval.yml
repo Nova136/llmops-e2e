@@ -16,7 +16,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: '3.9'
           cache: 'pip'
 
       - name: Install dependencies
@@ -56,7 +56,7 @@ jobs:
         run: |
           python -m pytest tests/ -v
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # DEEPEVAL_API_KEY removed as requested in previous interaction
           API_URL: http://localhost:8000
 
       # --- Ensure server processes are explicitly cleaned up ---
