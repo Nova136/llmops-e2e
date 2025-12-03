@@ -23,25 +23,48 @@ jobs:
         run: |
           pip install deepeval
           pip install -r requirements.txt
+          # Pytest is likely in requirements.txt, if not: pip install pytest
 
+      # --- Start the FastAPI server using a simple background command ---
       - name: Start FastAPI server in background
-        uses: christophelim/background-action@v1.0.0
-        with:
-          command: python day02.py
+        run: |
+          # Use 'nohup' and '&' to run in background. 
+          # Redirect output to a log file if you need it for debugging artifacts later.
+          nohup python day02.py > server.log 2>&1 &
         env:
           PYTHONUNBUFFERED: 1
 
+      # --- Wait for the server to be ready using a robust shell loop ---
       - name: Wait for server to be ready
         run: |
-          curl --retry 5 --retry-delay 6 -v http://localhost:8000/docs
-          echo "Server is ready and reachable."
-
-      - name: Run DeepEval unit tests with pytest (No API Key Required)
+          # The loop waits 2 seconds between checks, up to 15 times (30 sec total)
+          for i in {1..15}; do
+            if curl -f http://localhost:8000/docs > /dev/null 2>&1; then
+              echo "Server is ready!"
+              exit 0
+            fi
+            echo "Waiting for server... ($i/15)"
+            sleep 2
+          done
+          echo "Server failed to start within timeout"
+          # Output logs if it fails
+          cat server.log || true
+          exit 1
+      
+      # --- Run the tests ---
+      - name: Run DeepEval unit tests with pytest
         run: |
           python -m pytest tests/ -v
         env:
-          # DEEPEVAL_API_KEY removed as requested
+          # DEEPEVAL_API_KEY removed as requested in previous interaction
           API_URL: http://localhost:8000
+
+      # --- Ensure server processes are explicitly cleaned up ---
+      - name: Stop FastAPI server
+        if: always()
+        run: |
+          # This command reliably finds and terminates the background process started by 'python day02.py'
+          pkill -f "python day02.py" || true
 
       - name: Upload DeepEval results as Artifacts
         uses: actions/upload-artifact@v4
@@ -51,4 +74,5 @@ jobs:
           path: |
             deepeval-results/
             test-results/
-            .deepeval/ 
+            .deepeval/
+            server.log # Upload the log file now that we are capturing it
