@@ -13,7 +13,6 @@ jobs:
   scan-filesystem:
     name: Scan Filesystem
     runs-on: ubuntu-latest
-    # Recommended permissions configuration for GitHub Actions security
     permissions:
       contents: read
       security-events: write
@@ -22,33 +21,32 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Use a specific, stable version instead of 'master' for production workflows
+      # Use a specific, stable version of the Trivy Action (e.g., 0.14.0)
       - name: Run Trivy vulnerability scanner in FS mode
         uses: aquasecurity/trivy-action@0.14.0 
         with:
           scan-type: 'fs'
-          # Use 'github' format to generate SARIF report directly
+          # Use 'github' format to generate a GitHub-compatible SARIF report
           format: 'github' 
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
-          # Action automatically handles versioning internally, no need to specify version unless debugging
+          # Optional: Limit the severities included in the SARIF file to reduce file size and compliance issues
+          limit-severities-for-sarif: true 
 
-      # Updated to use the requested CodeQL Action v4
+      # Reverting to v3 of the upload-sarif action for better compatibility with current Trivy SARIF output
       - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v3
         if: always() # Ensures the report is uploaded even if the scan step fails
         with:
           sarif_file: 'trivy-results.sarif'
-          # This action requires an explicit 'repo-token' input if using custom permissions
-          token: ${{ secrets.GITHUB_TOKEN }}
 
 
+  # The 'scan-container' job remains unchanged from the previous working version
   scan-container:
     name: Scan Container Image
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # Added 'packages: write' permission if you decide to push to GHCR later
       security-events: write
     
     steps:
@@ -59,31 +57,25 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker image
-        # Standardizing the tag to use environment variables for better traceability
         uses: docker/build-push-action@v5
         with:
           context: .
-          tags: ${{ github.repository }}:latest # Using GH repo name for standard tag
-          push: false # We only need to load it into the runner's docker daemon
+          tags: ${{ github.repository }}:latest
+          push: false
           load: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Run Trivy vulnerability scanner in image mode and fail on High/Critical
-        # Use a specific, stable version
         uses: aquasecurity/trivy-action@0.14.0 
         with:
-          # Reference the standardized image tag
           image-ref: '${{ github.repository }}:latest'
           scan-type: 'image'
-          # Use 'table' format for readability in GitHub Actions logs
-          format: 'table' 
-          # The exit-code: '1' ensures the job fails if a vulnerability is found.
+          format: 'table'
           exit-code: '1' 
           severity: 'CRITICAL,HIGH'
 
       - name: Generate JSON report for artifact upload (Optional)
-        # Use a specific, stable version
         uses: aquasecurity/trivy-action@0.14.0 
         with:
           image-ref: '${{ github.repository }}:latest'
@@ -98,10 +90,8 @@ jobs:
           name: trivy-image-report
           path: trivy-image-results.json
 
-      # Clean up is optional as the runner environment is ephemeral, but good practice
       - name: Clean up Docker images after scan
         if: always()
         run: |
           docker rmi ${{ github.repository }}:latest || true
-          # Prune command is generally enough to clean up all build cache and layers
           docker system prune -af
