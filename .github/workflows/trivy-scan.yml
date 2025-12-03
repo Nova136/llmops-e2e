@@ -29,11 +29,10 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
-          trivy-version: '0.67.2'
-          skip-version-check: true
+          version: '0.68.1'
 
       - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
@@ -58,13 +57,9 @@ jobs:
           context: .
           tags: fastapi-app:latest
           push: false
+          load: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Clean up Docker system before scan
-        run: |
-          docker system prune -f
-          docker image prune -f
 
       - name: Run Trivy vulnerability scanner in image mode
         uses: aquasecurity/trivy-action@master
@@ -74,8 +69,7 @@ jobs:
           format: 'table'
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
-          trivy-version: '0.67.2'
-          skip-version-check: true
+          version: '0.68.1'
 
       - name: Generate Trivy JSON report
         uses: aquasecurity/trivy-action@master
@@ -84,8 +78,7 @@ jobs:
           scan-ref: 'fastapi-app:latest'
           format: 'json'
           output: 'trivy-image-results.json'
-          trivy-version: '0.67.2'
-          skip-version-check: true
+          version: '0.68.1'
 
       - name: Clean up Docker images after scan
         if: always()
